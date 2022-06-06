@@ -1,0 +1,197 @@
+---
+title: "Loan Credit"
+author: "Frengky"
+date: '2022-06-03'
+output: html_document
+---
+Business Understanding :
+
+Loan Prediction Model digunakan untuk memprediksi kelayakan nasabah dalam menerima status pinjaman disebuah bank, status diantaranya terbagi menjadi 6 kelas yaitu Charged Off,Current,Default,Does not meet the credit policy. Status:Charged Off  Does not meet the credit policy. Status:Fully Paid,Fully Paid,In Grace Period,Late (16-30 days),Late (31-120 days),dataset berasal dari data historikal sebuah bank yang nantinya dibangun menggunakan model naives bayes, hasil dari model diharapkan dapat membantu bank tersebut menentukan status pinjaman dari calon nasibah dengan meminimalisir adanya credit risk.
+
+1. Data Collection
+
+Dataset didapat dari sebuah bank yang disimpan pada flat file csv, dibawah ini dilakukan import dataset
+```{r setup, include=FALSE}
+data <- read.csv("loan_data.csv")
+head(data)
+```
+
+
+Import library
+
+```{r cars}
+library(dplyr)
+library(gtools)
+library(gmodels)
+library(ggplot2)
+library(class)
+library(tidyr)
+```
+
+2. Data Prepraration
+Dibawah ini langkah-langkah digunakan untuk mempersiapkan data sebelum dilakukan permodelan, Data Preparation penting dilakukan agar permodelan dapat mengahasilkan model yang baik dan berkualitas.
+
+a. Data Understanding
+fitur glimpse digunakan untuk mengetahui tipe data disetiap kolom, diketahui ternyata terdapat banyak data yang tidak bernilai
+```{r pressure, echo=FALSE}
+glimpse(data)
+```
+
+
+b. Mengetahui Corelasi antar variabel
+didapat bahwa variabel "loan_amnt" dan "total_rec_prncp" memiliki variasi corelasi yang cukup kuat hingga bernilai 1
+```{r}
+GGally::ggcorr(loan[,-12], hjust = 1, layout.exp = 2, label = T, label_size = 2.9)
+```
+
+c. Filter data yang dibutuhkan
+Dari banyaknya variabel diatas maka diperlukan filter dari beberapa variabel yang hanya diperlukan untuk permodelan,variabel yang berisi nilai NA tidak diikut sertakan dan hanya variabel yang memiliki korelasi tinggi saja yang dipilih, selain itu dilakukan perubahan tipe data dari character menjadi tipe data factor
+```{r}
+loan <- data %>%
+  select(c(loan_amnt,funded_amnt_inv,term,int_rate,installment,grade,sub_grade,emp_title,emp_length,home_ownership,annual_inc,verification_status,loan_status,pymnt_plan,purpose,title,dti,pub_rec,revol_bal,revol_util,total_acc,initial_list_status,out_prncp,total_pymnt,total_rec_prncp,collection_recovery_fee,last_pymnt_amnt,application_type,application_type)) %>%
+  mutate_if(is.character, as.factor)
+glimpse(loan)
+```
+
+
+d. Cek Missing Values
+dibawah ini akan dilakukan pemerikasaan variabel yang memiliki missing value, terdapat ada beberapa variabel yang memiliki missing value diantaranya  revol_util,delinq_2yrs,total_acc,pub_rec dan annual_inc
+
+```{r}
+colSums(is.na(loan))
+```
+
+e. Handling Missing Values
+dibawah ini dilakukan handling missing value dengan cara menghilangkan baris yang memiliki missing value, hal ini wajar dilakukan karena dataset memililki 466,285 baris dan variabel yang memiliki missing value tidak lebih dari 500 baris, sehingga penghapusan baris tidak akan mempengaruhi dataset secara signifikan 
+
+```{r}
+loan <- loan %>%
+  na.omit
+
+```
+
+setelah dilakukan handling missing values didapatkan data yang sudah bersih, dapat dilihat seperti pada hasil pemeriksaan dibawah ini
+
+```{r}
+colSums(is.na(loan))
+```
+
+f. Splitting Data
+Splitting Data dilakukan untuk membagi data test dan data train, untuk permodelan ini proporsi yang digunakan data train dan data tes masing-masing adalah 80% dan 20 %
+
+
+```{r}
+set.seed(303)
+
+index <- sample(nrow(loan), nrow(loan)*0.8)
+loan_train <- loan[index,]
+loan_test <- loan[-index,]
+
+
+```
+
+3. Model Development
+
+a. Model Training
+Dibawah ini dilakukan permodelan menggunakan naiveBayes dengan target pada variabel loan_status dan semua prediktor pada data loan_train
+```{r}
+library(e1071)
+model_naive<- naiveBayes(loan_status ~ ., data = loan_train,  laplace = 1)
+```
+
+Dibawah ini dilakukan interpretasi penggabungan hasil prediksi pada dataset loan_test
+```{r}
+loan_test$pred <- predict(model_naive, newdata = loan_test )
+
+```
+b. Evaluasi Matrix
+dibawah ini dilakukan evaluasi matriks menggunakan library caret dengan pengkondisian kelas positive diberikan pada kelas Current, hal ini karena kelas Current merupakan mayoritas disetiap kelas yang lainnya
+
+```{r}
+library(caret)
+
+# confusion matrix
+confusionMatrix(data = loan_test$pred, reference = loan_test$loan_status, positive = "Current")
+```
+Conclusion:
+Dari hasil matrix evaluasi didapatkan bahwa model memiliki akurasi sebesar 82 %, karena fokus kelas positive diberikan pada kelas "Current" maka dapat diketahui bahwa pada permodelan ini memiliki nilai Specificity sebesar 95 %,Sensitivity sebesar 82 %, Precision sebesar 94%,
+
+Interpertasi
+Setelah dilakukan permodelan akan dilakukan pengecekan antara data aktual dan data prediksi menggunakan sampling, didapatkan dari ke 10 data sample yang diambil secara acak model salah memprediksi pada index aktual 8 dimana kelas fullypaid diprediksi oleh model menjadi kelas "Does not meet the credit policy. Status:Fully Paid"
+```{r}
+loan_test %>%
+  select(loan_status,pred) %>%
+  sample()
+```
+
+***VISUALISASI DATA****
+
+1. Mengetahui Corelasi Antar Variabel
+```{r}
+GGally::ggcorr(loan[,-12], hjust = 1, layout.exp = 2, label = T, label_size = 2.9)
+```
+2. Mengetahui missing data
+```{r}
+colSums(is.na(loan))
+```
+```{r}
+variabel <- c("revol_util","total_acc","pub_rec", "annual_inc")
+jumlah <- c(340,29,29,4)
+df <- data.frame(var, num)
+
+plot <- ggplot(df, aes(x=variabel,y=jumlah),text=label) + geom_col(fill="blue") +
+  labs(title = "Proporsi Jumlah Missing Values",
+       x = "Variabel",
+       y = NULL) +
+  theme_minimal() +
+  theme(legend.position = "none")
+plot
+```
+
+```{r}
+x <- nrow(loan_test)
+y <- nrow(loan_train)
+row <- c(x,y)
+data <- c("loan_test","loan_train")
+df <- data.frame(data,row)
+plot <- ggplot(df, aes(x=data,y=row),text=label) + geom_col(fill="yellow") +
+  labs(title = "Proporsi Data Train dan Data Test",
+       x = "Variabel",
+       y = NULL) +
+  theme_minimal() +
+  theme(legend.position = "none")
+plot
+```
+
+```{r}
+prop.table(table(loan_train$loan_status))
+```
+```{r}
+loan_train %>%
+  group_by(loan_status) %>%
+  summarise(freq=n()) %>%
+  ggplot(aes(x="", y=freq, fill=loan_status))+
+  geom_bar(stat = "identity", width = 5) +
+  coord_polar("y",start = 0) + geom_text(aes(label=paste0(round((freq/sum(freq))*100),"%")),
+position= position_stack(vjust = 0.9), color="white")+
+  labs(x = NULL,y=NULL, fill="loan_status", title = "Persentase class variabel target") +
+  theme_classic()
+
+```
+
+```{r}
+matriks <- c("Accuracy","Recall","Specificity","Precision")
+score <- c(82,82,96,94)
+dfm <- data.frame(matriks,score)
+dfm
+```
+```{r}
+plot1 <- ggplot(dfm, aes(x=matriks,y=score),text=label) + geom_col(fill="green") +
+  labs(title = "Score Matrix Evaluasi",
+       x = "Matrix",
+       y = NULL) +
+  theme_minimal() +
+  theme(legend.position = "none")
+plot1
+```
+
